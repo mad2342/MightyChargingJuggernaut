@@ -11,6 +11,8 @@
 - Juggernauts gain GUARDED state after making regular melee attacks.
 	- Instability reduction from standing/walking is applied
 	- Instability reduction from bracing is supressed
+- AI Juggernauts seems to make use of it too (needs final confirmation)
+	- Beware of "Brawler Banshees"!
 
 ## Known issues
 - As Guarded incorporates Entrenched at the moment (hardcoded via "GuardLevel") Juggernauts also get ENTRENCHED when brawling.
