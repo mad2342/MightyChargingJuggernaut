@@ -226,7 +226,7 @@ namespace MightyChargingJuggernaut
                         */
 
                         // Flat percentage
-                        float additionalStabilityDamage = __instance.OwningMech.MechDef.Chassis.MeleeInstability / 4;
+                        float additionalStabilityDamage = __instance.OwningMech.MechDef.Chassis.MeleeInstability / 2;
 
                         // Knockdown in one turn if stability damage is big enough?
                         /*
