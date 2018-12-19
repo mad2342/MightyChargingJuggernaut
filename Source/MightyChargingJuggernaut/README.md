@@ -18,8 +18,8 @@
 
 ## Known issues
 - EffectData in AbilityDefGu8.json is NOT responsible for the -1 Initiative of Juggernaut Melee Attacks, this is rebuild in code.
--- "MeleeHitPushBackPhases" is still checked in AbstractActor::ResolveAttackSequence but does not work anymore
--- EffectData staying in for reference
+	- "MeleeHitPushBackPhases" is still checked in AbstractActor::ResolveAttackSequence but does not work anymore
+	- EffectData staying in for reference
 
 ## Thanks
 * Morphyum
