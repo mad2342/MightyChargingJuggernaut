@@ -193,15 +193,18 @@ namespace MightyChargingJuggernaut
             Pilot pilot = __instance.owningActor.GetPilot();
             bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
 
+            // Get melee target
+            ICombatant MeleeTarget = (ICombatant)AccessTools.Property(typeof(MechMeleeSequence), "MeleeTarget").GetValue(__instance, null);
+
             if (pilotIsJuggernaut)
             {
+                // Reapplying "MeleeHitPushBackPhases" here as it doesn't seem to work anymore when only defined in AbilityDef
+                (MeleeTarget as AbstractActor).ForceUnitOnePhaseDown(__instance.owningActor.GUID, __instance.SequenceGUID, false);
+
                 Logger.LogLine("[MechMeleeSequence_OnMeleeComplete_POSTFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
 
                 if (Fields.JuggernautCharges)
                 {
-                    // Get melee target and apply additional stability damage
-                    ICombatant MeleeTarget = (ICombatant)AccessTools.Property(typeof(MechMeleeSequence), "MeleeTarget").GetValue(__instance, null);
-
                     //Logger.LogLine("ICombatant MeleeTargets Name: " + MeleeTarget.GetPilot().Name);
                     //AbstractActor TargetAbstractActor = MeleeTarget as AbstractActor;
                     //TargetAbstractActor.FlagForKnockdown();
@@ -275,11 +278,12 @@ namespace MightyChargingJuggernaut
                     // BEN: Include stability reduction only when Mech remained "stationary" (Taken from class AbstractActor: GuardLevel):
                     // bool flag2 = (this.HasFiredThisRound || !this.HasMovedThisRound) && this.DistMovedThisRound < 10f;
                     // bool flag3 = this.BracedLastRound || (flag2 && this.statCollection.GetValue<bool>("GuardedFromBeingStationary"));
-                    
+
                     if (__instance.OwningMech.DistMovedThisRound < 10f) // This is enough as Juggernauts must have "Bulwark" too
                     {
                         Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] Juggernaut did not move at all. Reduce instability through bracing.");
                         __instance.OwningMech.ApplyInstabilityReduction(StabilityChangeSource.Bracing);
+                        //__instance.OwningMech.IsEntrenched = true;
                     }
                 }
                 // ...not when charging
