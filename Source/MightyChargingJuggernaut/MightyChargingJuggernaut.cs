@@ -221,14 +221,22 @@ namespace MightyChargingJuggernaut
                     //@ToDo: Test & Finetune
                     if (MeleeTarget is Mech TargetMech)
                     {
-                        // Depending on distance?
+                        // Remove Entrenched when charging?
+                        if (TargetMech.IsEntrenched) {
+                            Logger.LogLine("[MechMeleeSequence_OnMeleeComplete_POSTFIX] Removing Entrenched from target");
+                            TargetMech.IsEntrenched = false;
+                            TargetMech.Combat.MessageCenter.PublishMessage(new FloatieMessage(TargetMech.GUID, TargetMech.GUID, "LOST: ENTRENCHED", FloatieMessage.MessageNature.Debuff));
+                        }
+
+
+                        // Additional stability damage depending on distance?
                         /*
                         float distMovedThisRound = __instance.OwningMech.DistMovedThisRound;
                         float percentMoved = distMovedThisRound / __instance.OwningMech.MaxSprintDistance;
                         float additionalStabilityDamage = __instance.OwningMech.MechDef.Chassis.MeleeInstability * percentMoved;
                         */
 
-                        // Flat percentage
+                        // Additional stability damage as a flat percentage?
                         float additionalStabilityDamage = __instance.OwningMech.MechDef.Chassis.MeleeInstability / 2;
 
                         // Knockdown in one turn if stability damage is big enough?
