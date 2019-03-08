@@ -49,32 +49,30 @@ namespace MightyChargingJuggernaut
     }
 
 
-    // @ToDo: DFAs from juggernauts can knock down without target beeing unsteady before?
-    /*
+    // DFAs from juggernauts can knock down without target beeing unsteady before?
     [HarmonyPatch(typeof(BattleTech.Mech))]
     [HarmonyPatch("AddInstability")]
     public static class BattleTech_AddInstability_Prefix
     {
         static void Prefix(Mech __instance, float amt, StabilityChangeSource source, string sourceGuid)
         {
-            // Check juggernaut 
             Pilot pilot = __instance.GetPilot();
             bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
+            bool isDFA = source == StabilityChangeSource.DFA;
 
-            if (pilotIsJuggernaut && amt > 0f)
+            if (pilotIsJuggernaut && isDFA && amt > 0f)
             {
+                Logger.LogLine("[BattleTech_AddInstability_PREFIX] Resetting Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
                 float projectedStability = __instance.CurrentStability + amt;
                 float maxStability = __instance.MaxStability;
-                bool isDFA = source == StabilityChangeSource.DFA;
 
-                if (isDFA && projectedStability > maxStability)
+                if (projectedStability > maxStability)
                 {
                     __instance.FlagForKnockdown();
                 }
             }
         }
     }
-    */
     
 
 
