@@ -15,14 +15,18 @@ namespace MightyChargingJuggernaut
 {
     public class MightyChargingJuggernaut
     {
+        internal static string LogPath;
         internal static string ModDirectory;
 
         // BEN: Debug (0: nothing, 1: errors, 2:all)
-        internal static int DebugLevel = 1;
+        internal static int DebugLevel = 2;
 
-        public static void Init(string directory, string settingsJSON)
+        public static void Init(string directory, string settings)
         {
             ModDirectory = directory;
+            LogPath = Path.Combine(ModDirectory, "MightyChargingJuggernaut.log");
+            File.CreateText(MightyChargingJuggernaut.LogPath);
+
             var harmony = HarmonyInstance.Create("de.ben.MightyChargingJuggernaut");
             harmony.PatchAll(Assembly.GetExecutingAssembly());
         }
@@ -48,32 +52,86 @@ namespace MightyChargingJuggernaut
         }
     }
 
-
-    // DFAs from juggernauts can knock down without target beeing unsteady before?
-    [HarmonyPatch(typeof(BattleTech.Mech))]
-    [HarmonyPatch("AddInstability")]
-    public static class BattleTech_AddInstability_Prefix
+    // DFAs from Juggernaut can directly knock a target down
+    [HarmonyPatch(typeof(MechDFASequence), "OnMeleeComplete")]
+    public static class MechDFASequence_OnMeleeComplete_Patch
     {
-        static void Prefix(Mech __instance, float amt, StabilityChangeSource source, string sourceGuid)
+        public static void Prefix(MechDFASequence __instance, ref MessageCenterMessage message)
         {
-            Pilot pilot = __instance.GetPilot();
-            bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
-            bool isDFA = source == StabilityChangeSource.DFA;
-
-            if (pilotIsJuggernaut && isDFA && amt > 0f)
+            try
             {
-                Logger.LogLine("[BattleTech_AddInstability_PREFIX] Resetting Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
-                float projectedStability = __instance.CurrentStability + amt;
-                float maxStability = __instance.MaxStability;
-
-                if (projectedStability > maxStability)
+                // No damage, no joy
+                AttackCompleteMessage attackCompleteMessage = (AttackCompleteMessage)message;
+                if (!attackCompleteMessage.attackSequence.attackDidDamage)
                 {
-                    __instance.FlagForKnockdown();
+                    Logger.LogLine("[MechDFASequence_OnMeleeComplete_PREFIX] Attack did no damage! Aborting...");
+                    return;
                 }
+
+                // Check juggernaut 
+                Pilot pilot = __instance.owningActor.GetPilot();
+                bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
+
+                if (pilotIsJuggernaut)
+                {
+                    // Get melee target
+                    ICombatant DFATarget = (ICombatant)AccessTools.Property(typeof(MechDFASequence), "DFATarget").GetValue(__instance, null);
+
+                    if (DFATarget is Mech TargetMech)
+                    {
+                        Logger.LogLine("[MechDFASequence_OnMeleeComplete_PREFIX] DFATarget.IsUnsteady: " + TargetMech.IsUnsteady);
+                        Logger.LogLine("[MechDFASequence_OnMeleeComplete_PREFIX] DFATarget.MaxStability: " + TargetMech.MaxStability);
+                        Logger.LogLine("[MechDFASequence_OnMeleeComplete_PREFIX] DFATarget.CurrentStability: " + TargetMech.CurrentStability);
+
+                        // IMPORTANT! At this point any stab dmg is already applied to the target, normalized by entrenched or terrain...
+                        // Additional stability damage depending on distance jumped?
+                        float additionalStabilityDamage = Utilities.GetAdditionalStabilityDamageFromJumpDistance(__instance.OwningMech, TargetMech, false);
+                        Logger.LogLine("[MechDFASequence_OnMeleeComplete_PREFIX] Apply additional stability damage from distance jumped: " + additionalStabilityDamage);
+                        TargetMech.AddAbsoluteInstability(additionalStabilityDamage, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
+                        Logger.LogLine("[MechDFASequence_OnMeleeComplete_PREFIX] DFATarget.CurrentStability: " + TargetMech.CurrentStability);
+
+                        //float projectedStability = TargetMech.CurrentStability + additionalStabilityDamage;
+                        //Logger.LogLine("[MechDFASequence_OnMeleeComplete_PREFIX] DFATarget.projectedStability: " + projectedStability);
+
+                        if (TargetMech.CurrentStability >= TargetMech.MaxStability)
+                        {
+                            Logger.LogLine("[MechDFASequence_OnMeleeComplete_PREFIX] Mech should be knocked down regardless of being unsteady before...");
+                            TargetMech.FlagForKnockdown();
+
+                            if (!TargetMech.IsUnsteady)
+                            {
+                                // Push message out
+                                TargetMech.Combat.MessageCenter.PublishMessage(new FloatieMessage(TargetMech.GUID, TargetMech.GUID, "OFF BALANCE", FloatieMessage.MessageNature.Debuff));
+                            }
+                        }
+
+
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e);
+            }
+        }
+        // Check things
+        public static void Postfix(MechDFASequence __instance)
+        {
+            try
+            {
+                ICombatant DFATarget = (ICombatant)AccessTools.Property(typeof(MechDFASequence), "DFATarget").GetValue(__instance, null);
+
+                if (DFATarget is Mech TargetMech)
+                {
+                    Logger.LogLine("[MechDFASequence_OnMeleeComplete_POSTFIX] DFATarget.CurrentStability: " + TargetMech.CurrentStability);
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e);
             }
         }
     }
-    
 
 
     [HarmonyPatch(typeof(MechMeleeSequence))]
@@ -82,15 +140,22 @@ namespace MightyChargingJuggernaut
     {
         static void Postfix(MechMeleeSequence __instance)
         {
-            // Check juggernaut 
-            Pilot pilot = __instance.owningActor.GetPilot();
-            bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
-
-            if (pilotIsJuggernaut)
+            try
             {
-                Logger.LogLine("[MechMeleeSequence_CompleteOrders_POSTFIX] Resetting Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
-                Fields.JuggernautCharges = false;
-                Logger.LogLine("[MechMeleeSequence_CompleteOrders_POSTFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
+                // Check juggernaut 
+                Pilot pilot = __instance.owningActor.GetPilot();
+                bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
+
+                if (pilotIsJuggernaut)
+                {
+                    Logger.LogLine("[MechMeleeSequence_CompleteOrders_POSTFIX] Resetting Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
+                    Fields.JuggernautCharges = false;
+                    Logger.LogLine("[MechMeleeSequence_CompleteOrders_POSTFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e);
             }
         }
     }
@@ -101,31 +166,38 @@ namespace MightyChargingJuggernaut
     {
         static void Postfix(MechMeleeSequence __instance, ref ActorMovementSequence ___moveSequence)
         {
-            // Check juggernaut 
-            Pilot pilot = __instance.owningActor.GetPilot();
-            bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
-
-            if (pilotIsJuggernaut)
+            try
             {
-                Logger.LogLine("[MechMeleeSequence_GenerateMeleePath_POSTFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
-                if (Fields.JuggernautCharges)
+                // Check juggernaut 
+                Pilot pilot = __instance.owningActor.GetPilot();
+                bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
+
+                if (pilotIsJuggernaut)
                 {
-                    ___moveSequence.IgnoreEndSmoothing = true;
-                    ___moveSequence.meleeType = MeleeAttackType.Charge;
+                    Logger.LogLine("[MechMeleeSequence_GenerateMeleePath_POSTFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
+                    if (Fields.JuggernautCharges)
+                    {
+                        ___moveSequence.IgnoreEndSmoothing = true;
+                        ___moveSequence.meleeType = MeleeAttackType.Charge;
 
-                    // @ToDo: Check if this will change anything but animation!
-                    /*
-                    MovementCapabilitiesDef Capabilities = (MovementCapabilitiesDef)AccessTools.Property(typeof(ActorMovementSequence), "Capabilities").GetValue(___moveSequence, null);
-                    float SprintVelocity = Capabilities.SprintVelocity;
-                    float SprintAcceleration = Capabilities.SprintAcceleration;
+                        // @ToDo: Check if this will change anything but animation!
+                        /*
+                        MovementCapabilitiesDef Capabilities = (MovementCapabilitiesDef)AccessTools.Property(typeof(ActorMovementSequence), "Capabilities").GetValue(___moveSequence, null);
+                        float SprintVelocity = Capabilities.SprintVelocity;
+                        float SprintAcceleration = Capabilities.SprintAcceleration;
 
-                    MoveType currentMoveType = (MoveType)AccessTools.Field(typeof(ActorMovementSequence), "moveType").GetValue(___moveSequence);
-                    currentMoveType = MoveType.Sprinting;
-                    Logger.LogLine("[MechMeleeSequence_GenerateMeleePath_POSTFIX] moveSequence.currentMoveType: " + currentMoveType.ToString());
-                    */
+                        MoveType currentMoveType = (MoveType)AccessTools.Field(typeof(ActorMovementSequence), "moveType").GetValue(___moveSequence);
+                        currentMoveType = MoveType.Sprinting;
+                        Logger.LogLine("[MechMeleeSequence_GenerateMeleePath_POSTFIX] moveSequence.currentMoveType: " + currentMoveType.ToString());
+                        */
+                    }
+                    Logger.LogLine("[MechMeleeSequence_GenerateMeleePath_POSTFIX] moveSequence.IgnoreEndSmoothing: " + ___moveSequence.IgnoreEndSmoothing.ToString());
+                    Logger.LogLine("[MechMeleeSequence_GenerateMeleePath_POSTFIX] moveSequence.meleeType: " + ___moveSequence.meleeType.ToString());
                 }
-                Logger.LogLine("[MechMeleeSequence_GenerateMeleePath_POSTFIX] moveSequence.IgnoreEndSmoothing: " + ___moveSequence.IgnoreEndSmoothing.ToString());
-                Logger.LogLine("[MechMeleeSequence_GenerateMeleePath_POSTFIX] moveSequence.meleeType: " + ___moveSequence.meleeType.ToString());
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e);
             }
         }
     }
@@ -136,19 +208,26 @@ namespace MightyChargingJuggernaut
     {
         static void Prefix(MechMeleeSequence __instance)
         {
-            // Check juggernaut 
-            Pilot pilot = __instance.owningActor.GetPilot();
-            bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
-
-            if (pilotIsJuggernaut)
+            try
             {
-                Logger.LogLine("[MechMeleeSequence_BuildMeleeDirectorSequence_PREFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
-                if (Fields.JuggernautCharges)
+                // Check juggernaut 
+                Pilot pilot = __instance.owningActor.GetPilot();
+                bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
+
+                if (pilotIsJuggernaut)
                 {
-                    MeleeAttackType selectedMeleeType = (MeleeAttackType)AccessTools.Property(typeof(MechMeleeSequence), "selectedMeleeType").GetValue(__instance, null);
-                    selectedMeleeType = MeleeAttackType.Charge;
-                    Logger.LogLine("[MechMeleeSequence_BuildMeleeDirectorSequence_PREFIX] selectedMeleeType: " + selectedMeleeType.ToString());
+                    Logger.LogLine("[MechMeleeSequence_BuildMeleeDirectorSequence_PREFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
+                    if (Fields.JuggernautCharges)
+                    {
+                        MeleeAttackType selectedMeleeType = (MeleeAttackType)AccessTools.Property(typeof(MechMeleeSequence), "selectedMeleeType").GetValue(__instance, null);
+                        selectedMeleeType = MeleeAttackType.Charge;
+                        Logger.LogLine("[MechMeleeSequence_BuildMeleeDirectorSequence_PREFIX] selectedMeleeType: " + selectedMeleeType.ToString());
+                    }
                 }
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e);
             }
         }
     }
@@ -159,24 +238,31 @@ namespace MightyChargingJuggernaut
     {
         static void Prefix(MechMeleeSequence __instance)
         {
-            // Check juggernaut 
-            Pilot pilot = __instance.owningActor.GetPilot();
-            bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
-
-            if (pilotIsJuggernaut)
+            try
             {
-                Logger.LogLine("[MechMeleeSequence_ExecuteMove_PREFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
+                // Check juggernaut 
+                Pilot pilot = __instance.owningActor.GetPilot();
+                bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
 
-                if (Fields.JuggernautCharges)
+                if (pilotIsJuggernaut)
                 {
-                    // BEN: This is to handle instability reduction correctly. If a juggernaut is charging it will be handled as a sprint.
-                    __instance.OwningMech.SprintedLastRound = true;
-                    Logger.LogLine("[MechMeleeSequence_ExecuteMove_PREFIX] OwningMech.SprintedLastRound: " + __instance.OwningMech.SprintedLastRound.ToString());
+                    Logger.LogLine("[MechMeleeSequence_ExecuteMove_PREFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
 
-                    // Push message out
-                    AbstractActor actor = __instance.owningActor;
-                    actor.Combat.MessageCenter.PublishMessage(new FloatieMessage(actor.GUID, actor.GUID, "CHARGING", FloatieMessage.MessageNature.Inspiration));
+                    if (Fields.JuggernautCharges)
+                    {
+                        // BEN: This is to handle instability reduction correctly. If a juggernaut is charging it will be handled as a sprint.
+                        __instance.OwningMech.SprintedLastRound = true;
+                        Logger.LogLine("[MechMeleeSequence_ExecuteMove_PREFIX] OwningMech.SprintedLastRound: " + __instance.OwningMech.SprintedLastRound.ToString());
+
+                        // Push message out
+                        AbstractActor actor = __instance.owningActor;
+                        actor.Combat.MessageCenter.PublishMessage(new FloatieMessage(actor.GUID, actor.GUID, "CHARGING", FloatieMessage.MessageNature.Inspiration));
+                    }
                 }
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e);
             }
         }
     }
@@ -187,71 +273,87 @@ namespace MightyChargingJuggernaut
     {
         static void Postfix(MechMeleeSequence __instance, ref MessageCenterMessage message)
         {
-            // Check juggernaut 
-            Pilot pilot = __instance.owningActor.GetPilot();
-            bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
-
-            // Get melee target
-            ICombatant MeleeTarget = (ICombatant)AccessTools.Property(typeof(MechMeleeSequence), "MeleeTarget").GetValue(__instance, null);
-
-            if (pilotIsJuggernaut)
+            try
             {
-                // Reapplying "MeleeHitPushBackPhases" here as it doesn't seem to work anymore when only defined in AbilityDef
-                (MeleeTarget as AbstractActor).ForceUnitOnePhaseDown(__instance.owningActor.GUID, __instance.SequenceGUID, false);
-
-                Logger.LogLine("[MechMeleeSequence_OnMeleeComplete_POSTFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
-
-                if (Fields.JuggernautCharges)
+                // No hit, no joy
+                AttackCompleteMessage attackCompleteMessage = (AttackCompleteMessage)message;
+                if (attackCompleteMessage.attackSequence.attackCompletelyMissed)
                 {
-                    //Logger.LogLine("ICombatant MeleeTargets Name: " + MeleeTarget.GetPilot().Name);
-                    //AbstractActor TargetAbstractActor = MeleeTarget as AbstractActor;
-                    //TargetAbstractActor.FlagForKnockdown();
+                    Logger.LogLine("[MechMeleeSequence_OnMeleeComplete_POSTFIX] Missed! Aborting...");
+                    return;
+                }
 
-                    // Instability for attacker on a miss?
-                    /*
-                    AttackCompleteMessage attackCompleteMessage = (AttackCompleteMessage)message;
-                    if (attackCompleteMessage.attackSequence.attackCompletelyMissed)
+                // Check juggernaut 
+                Pilot pilot = __instance.owningActor.GetPilot();
+                bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
+
+                // Get melee target
+                ICombatant MeleeTarget = (ICombatant)AccessTools.Property(typeof(MechMeleeSequence), "MeleeTarget").GetValue(__instance, null);
+
+                if (pilotIsJuggernaut)
+                {
+                    // Reapplying "MeleeHitPushBackPhases" here as it doesn't seem to work anymore when only defined in AbilityDef
+                    (MeleeTarget as AbstractActor).ForceUnitOnePhaseDown(__instance.owningActor.GUID, __instance.SequenceGUID, false);
+
+                    Logger.LogLine("[MechMeleeSequence_OnMeleeComplete_POSTFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
+
+                    if (Fields.JuggernautCharges)
                     {
-                        __instance.OwningMech.AddAbsoluteInstability(__instance.OwningMech.tonnage / 2, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
-                    }
-                    */
+                        //Logger.LogLine("ICombatant MeleeTargets Name: " + MeleeTarget.GetPilot().Name);
+                        //AbstractActor TargetAbstractActor = MeleeTarget as AbstractActor;
+                        //TargetAbstractActor.FlagForKnockdown();
 
-                    //@ToDo: Test & Finetune
-                    if (MeleeTarget is Mech TargetMech)
-                    {
-                        // Remove Entrenched when charging?
-                        if (TargetMech.IsEntrenched) {
-                            Logger.LogLine("[MechMeleeSequence_OnMeleeComplete_POSTFIX] Removing Entrenched from target");
-                            TargetMech.IsEntrenched = false;
-                            TargetMech.Combat.MessageCenter.PublishMessage(new FloatieMessage(TargetMech.GUID, TargetMech.GUID, "LOST: ENTRENCHED", FloatieMessage.MessageNature.Debuff));
-                        }
-
-
-                        // Additional stability damage depending on distance?
+                        // Instability for attacker on a miss?
                         /*
-                        float distMovedThisRound = __instance.OwningMech.DistMovedThisRound;
-                        float percentMoved = distMovedThisRound / __instance.OwningMech.MaxSprintDistance;
-                        float additionalStabilityDamage = __instance.OwningMech.MechDef.Chassis.MeleeInstability * percentMoved;
-                        */
-
-                        // Additional stability damage as a flat percentage?
-                        float additionalStabilityDamage = __instance.OwningMech.MechDef.Chassis.MeleeInstability / 2;
-
-                        // Knockdown in one turn if stability damage is big enough?
-                        /*
-                        bool isAlreadyUnsteady = TargetMech.IsUnsteady;
-                        float projectedStability = TargetMech.CurrentStability + additionalStabilityDamage;
-                        float maxStability = TargetMech.MaxStability;
-                        if (!isAlreadyUnsteady && projectedStability > maxStability)
+                        AttackCompleteMessage attackCompleteMessage = (AttackCompleteMessage)message;
+                        if (attackCompleteMessage.attackSequence.attackCompletelyMissed)
                         {
-                            TargetMech.FlagForKnockdown();
+                            __instance.OwningMech.AddAbsoluteInstability(__instance.OwningMech.tonnage / 2, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
                         }
                         */
 
-                        Logger.LogLine("[MechMeleeSequence_OnMeleeComplete_POSTFIX] Apply additional stability damage from charging (50% of OwningMech.MechDef.Chassis.MeleeInstability): " + additionalStabilityDamage);
-                        TargetMech.AddAbsoluteInstability(additionalStabilityDamage, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
+                        //@ToDo: Test & Finetune
+                        if (MeleeTarget is Mech TargetMech)
+                        {
+                            // Remove Entrenched when charging?
+                            if (TargetMech.IsEntrenched)
+                            {
+                                Logger.LogLine("[MechMeleeSequence_OnMeleeComplete_POSTFIX] Removing Entrenched from target");
+                                TargetMech.IsEntrenched = false;
+                                TargetMech.Combat.MessageCenter.PublishMessage(new FloatieMessage(TargetMech.GUID, TargetMech.GUID, "LOST: ENTRENCHED", FloatieMessage.MessageNature.Debuff));
+                            }
+
+
+                            // Additional stability damage depending on distance?
+                            /*
+                            float distMovedThisRound = __instance.OwningMech.DistMovedThisRound;
+                            float percentMoved = distMovedThisRound / __instance.OwningMech.MaxSprintDistance;
+                            float additionalStabilityDamage = __instance.OwningMech.MechDef.Chassis.MeleeInstability * percentMoved;
+                            */
+
+                            // Additional stability damage as a flat percentage?
+                            float additionalStabilityDamage = __instance.OwningMech.MechDef.Chassis.MeleeInstability / 2;
+
+                            // Knockdown in one turn if stability damage is big enough?
+                            /*
+                            bool isAlreadyUnsteady = TargetMech.IsUnsteady;
+                            float projectedStability = TargetMech.CurrentStability + additionalStabilityDamage;
+                            float maxStability = TargetMech.MaxStability;
+                            if (!isAlreadyUnsteady && projectedStability > maxStability)
+                            {
+                                TargetMech.FlagForKnockdown();
+                            }
+                            */
+
+                            Logger.LogLine("[MechMeleeSequence_OnMeleeComplete_POSTFIX] Apply additional stability damage from charging (50% of OwningMech.MechDef.Chassis.MeleeInstability): " + additionalStabilityDamage);
+                            TargetMech.AddAbsoluteInstability(additionalStabilityDamage, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
+                        }
                     }
                 }
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e);
             }
         }
     }
@@ -262,41 +364,48 @@ namespace MightyChargingJuggernaut
     {
         static void Prefix(MechMeleeSequence __instance)
         {
-            // Check juggernaut 
-            Pilot pilot = __instance.owningActor.GetPilot();
-            bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
-
-            if (pilotIsJuggernaut)
+            try
             {
-                // BEN: In some rare occasions DistMovedThisRound is smaller than MaxWalkDistance BUT unit is marked as sprinting via CostLeft from Pathing.
-                // Relying on the mark set at [Pathing_UpdateMeleePath_POSTFIX], DistMovedThisRound is only logged as a reference here.
-                Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] maxWalkDistance: " + __instance.OwningMech.MaxWalkDistance);
-                Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] distMovedThisRound: " + __instance.OwningMech.DistMovedThisRound);
-                Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] SprintedLastRound: " + __instance.owningActor.SprintedLastRound.ToString());
-                Logger.LogLine("[MechMeleeSequence_ExecuteMove_PREFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
+                // Check juggernaut 
+                Pilot pilot = __instance.owningActor.GetPilot();
+                bool pilotIsJuggernaut = MightyChargingJuggernaut.IsJuggernaut(pilot);
 
-                // BEN: Juggernauts gain GUARDED only on regular melee attack...
-                if (!__instance.owningActor.SprintedLastRound)
+                if (pilotIsJuggernaut)
                 {
-                    Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] Juggernaut only moved. Apply braced but don't further reduce instability.");
-                    __instance.owningActor.BracedLastRound = true;
+                    // BEN: In some rare occasions DistMovedThisRound is smaller than MaxWalkDistance BUT unit is marked as sprinting via CostLeft from Pathing.
+                    // Relying on the mark set at [Pathing_UpdateMeleePath_POSTFIX], DistMovedThisRound is only logged as a reference here.
+                    Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] maxWalkDistance: " + __instance.OwningMech.MaxWalkDistance);
+                    Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] distMovedThisRound: " + __instance.OwningMech.DistMovedThisRound);
+                    Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] SprintedLastRound: " + __instance.owningActor.SprintedLastRound.ToString());
+                    Logger.LogLine("[MechMeleeSequence_ExecuteMove_PREFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges.ToString());
 
-                    // BEN: Include stability reduction only when Mech remained "stationary" (Taken from class AbstractActor: GuardLevel):
-                    // bool flag2 = (this.HasFiredThisRound || !this.HasMovedThisRound) && this.DistMovedThisRound < 10f;
-                    // bool flag3 = this.BracedLastRound || (flag2 && this.statCollection.GetValue<bool>("GuardedFromBeingStationary"));
-
-                    if (__instance.OwningMech.DistMovedThisRound < 10f) // This is enough as Juggernauts must have "Bulwark" too
+                    // BEN: Juggernauts gain GUARDED only on regular melee attack...
+                    if (!__instance.owningActor.SprintedLastRound)
                     {
-                        Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] Juggernaut did not move at all. Reduce instability through bracing.");
-                        __instance.OwningMech.ApplyInstabilityReduction(StabilityChangeSource.Bracing);
-                        //__instance.OwningMech.IsEntrenched = true;
+                        Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] Juggernaut only moved. Apply braced but don't further reduce instability.");
+                        __instance.owningActor.BracedLastRound = true;
+
+                        // BEN: Include stability reduction only when Mech remained "stationary" (Taken from class AbstractActor: GuardLevel):
+                        // bool flag2 = (this.HasFiredThisRound || !this.HasMovedThisRound) && this.DistMovedThisRound < 10f;
+                        // bool flag3 = this.BracedLastRound || (flag2 && this.statCollection.GetValue<bool>("GuardedFromBeingStationary"));
+
+                        if (__instance.OwningMech.DistMovedThisRound < 10f) // This is enough as Juggernauts must have "Bulwark" too
+                        {
+                            Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] Juggernaut did not move at all. Reduce instability through bracing.");
+                            __instance.OwningMech.ApplyInstabilityReduction(StabilityChangeSource.Bracing);
+                            //__instance.OwningMech.IsEntrenched = true;
+                        }
+                    }
+                    // ...not when charging
+                    else
+                    {
+                        Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] Juggernaut sprinted. Should not apply instability reduction.");
                     }
                 }
-                // ...not when charging
-                else
-                {
-                    Logger.LogLine("[MechMeleeSequence_OnMoveComplete_PREFIX] Juggernaut sprinted. Should not apply instability reduction.");
-                }
+            }
+            catch (Exception e)
+            {
+                Logger.LogError(e);
             }
         }
     }
