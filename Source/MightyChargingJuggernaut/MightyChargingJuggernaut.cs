@@ -62,7 +62,8 @@ namespace MightyChargingJuggernaut
             {
                 // No damage, no joy
                 AttackCompleteMessage attackCompleteMessage = (AttackCompleteMessage)message;
-                if (!attackCompleteMessage.attackSequence.attackDidDamage)
+                //if (!attackCompleteMessage.attackSequence.attackDidDamage)
+                if (attackCompleteMessage.attackSequence.attackCompletelyMissed)
                 {
                     Logger.LogLine("[MechDFASequence_OnMeleeComplete_PREFIX] Attack did no damage! Aborting...");
                     return;
