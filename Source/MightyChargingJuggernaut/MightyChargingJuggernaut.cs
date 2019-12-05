@@ -19,7 +19,7 @@ namespace MightyChargingJuggernaut
         internal static string ModDirectory;
 
         // BEN: Debug (0: nothing, 1: errors, 2:all)
-        internal static int DebugLevel = 1;
+        internal static int DebugLevel = 2;
 
         public static void Init(string directory, string settings)
         {
