@@ -9,7 +9,5 @@
 	"ReqSkill" : "Guts",
 	"ReqSkillLevel" : 8,
 	"ActivationTime" : "Passive",
-    "Targeting" : "NotSet",
-    "ActivationCooldown" : 4,
 	"IsPrimaryAbility" : true
 }
