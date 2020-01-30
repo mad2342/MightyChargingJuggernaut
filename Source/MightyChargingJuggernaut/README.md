@@ -13,7 +13,7 @@
 - Juggernauts gain GUARDED state after making regular melee attacks.
 	- Instability reduction from standing/walking is applied
 	- Instability reduction from bracing is supressed
-- AI Juggernauts seems to make use of it too (needs final confirmation)
+- AI Juggernauts will make use of it too...
 	- Beware of "Brawler Banshees"!
 
 ## Known issues
