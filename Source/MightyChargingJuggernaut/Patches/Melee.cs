@@ -121,6 +121,7 @@ namespace MightyChargingJuggernaut.Patches
                             // Include stability reduction only when Mech remained "stationary"
                             if (__instance.OwningMech.DistMovedThisRound < 10f)
                             {
+                                // @ToDo: Check if this will be applied from Core already and thus will result in a doubled reduction...
                                 Logger.Debug("[MechMeleeSequence_OnMoveComplete_PREFIX] Juggernaut did not move at all. Reduce instability.");
                                 __instance.OwningMech.ApplyInstabilityReduction(StabilityChangeSource.RemainingStationary);
                             }

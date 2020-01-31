@@ -24,11 +24,11 @@ namespace MightyChargingJuggernaut.Patches
                         string additionalDetails = "Sprint to TACKLE the target using Piloting skill to hit. Ignores EVASIVE. Hit removes GUARDED, deals damage and stability damage.";
 
                         // I really need to learn how to call private methods with Harmony
-                        //new Traverse(__instance.GetType()).Method("ShowFireButton", new object[] { mode, additionalDetails }).SetValue(__instance);
+                        //Traverse.Create(__instance).Method("ShowFireButton", new object[] { mode, additionalDetails }).GetValue();
 
                         // Doesn't work either. Note that the desired method is declared in the base class of __instance (SelectionState)
-                        MethodInfo mi = typeof(SelectionState).GetMethod("ShowFireButton", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
-                        mi.Invoke(__instance, new object[] { mode, additionalDetails });
+                        //MethodInfo mi = typeof(SelectionState).GetMethod("ShowFireButton", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+                        //mi.Invoke(__instance, new object[] { mode, additionalDetails });
                     }
                 }
                 catch (Exception e)
