@@ -35,6 +35,7 @@
   <ItemGroup>
     <Reference Include="0Harmony" />
     <Reference Include="Assembly-CSharp" />
+    <Reference Include="Assembly-CSharp-firstpass" />
     <Reference Include="Newtonsoft.Json" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -58,6 +59,7 @@
     <Compile Include="Patches\DFA.cs" />
     <Compile Include="Patches\Melee.cs" />
     <Compile Include="Patches\Paths.cs" />
+    <Compile Include="Patches\UserInterface.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utilities.cs" />
   </ItemGroup>

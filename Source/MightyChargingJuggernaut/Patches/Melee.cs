@@ -121,8 +121,8 @@ namespace MightyChargingJuggernaut.Patches
                             // Include stability reduction only when Mech remained "stationary"
                             if (__instance.OwningMech.DistMovedThisRound < 10f)
                             {
-                                Logger.Debug("[MechMeleeSequence_OnMoveComplete_PREFIX] Juggernaut did not move at all. Reduce instability through bracing.");
-                                __instance.OwningMech.ApplyInstabilityReduction(StabilityChangeSource.Bracing);
+                                Logger.Debug("[MechMeleeSequence_OnMoveComplete_PREFIX] Juggernaut did not move at all. Reduce instability.");
+                                __instance.OwningMech.ApplyInstabilityReduction(StabilityChangeSource.RemainingStationary);
                             }
                         }
                         // ...but not when charging
@@ -184,6 +184,7 @@ namespace MightyChargingJuggernaut.Patches
                                     TargetMech.Combat.MessageCenter.PublishMessage(new FloatieMessage(TargetMech.GUID, TargetMech.GUID, "LOST: ENTRENCHED", FloatieMessage.MessageNature.Debuff));
                                 }
 
+                                /*
                                 // Additional stability damage depending on distance?
                                 float additionalStabilityDamage = Utilities.GetAdditionalStabilityDamageFromSprintDistance(__instance.OwningMech, TargetMech, false);
 
@@ -195,6 +196,7 @@ namespace MightyChargingJuggernaut.Patches
 
                                 TargetMech.AddAbsoluteInstability(additionalStabilityDamage, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
                                 Logger.Debug("[MechMeleeSequence_OnMeleeComplete_POSTFIX] MeleeTarget.CurrentStability: " + TargetMech.CurrentStability);
+                                */
                             }
                         }
                     }

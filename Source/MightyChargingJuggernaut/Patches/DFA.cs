@@ -39,6 +39,7 @@ namespace MightyChargingJuggernaut.Patches
                             Logger.Debug("[MechDFASequence_OnMeleeComplete_PREFIX] DFATarget.MaxStability: " + TargetMech.MaxStability);
                             Logger.Debug("[MechDFASequence_OnMeleeComplete_PREFIX] DFATarget.CurrentStability: " + TargetMech.CurrentStability);
 
+                            /*
                             // Additional stability damage depending on distance jumped?
                             float additionalStabilityDamage = Utilities.GetAdditionalStabilityDamageFromJumpDistance(__instance.OwningMech, TargetMech, false);
 
@@ -50,6 +51,7 @@ namespace MightyChargingJuggernaut.Patches
 
                             TargetMech.AddAbsoluteInstability(additionalStabilityDamage, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
                             Logger.Debug("[MechDFASequence_OnMeleeComplete_PREFIX] DFATarget.CurrentStability: " + TargetMech.CurrentStability);
+                            */
 
                             if (TargetMech.CurrentStability >= TargetMech.MaxStability)
                             {
@@ -71,6 +73,7 @@ namespace MightyChargingJuggernaut.Patches
                 }
             }
 
+            /*
             // Check things
             public static void Postfix(MechDFASequence __instance)
             {
@@ -87,6 +90,7 @@ namespace MightyChargingJuggernaut.Patches
                     Logger.Error(e);
                 }
             }
+            */
         }
     }
 }
