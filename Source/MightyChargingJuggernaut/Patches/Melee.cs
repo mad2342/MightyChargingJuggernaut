@@ -7,6 +7,82 @@ namespace MightyChargingJuggernaut.Patches
 {
     class Melee
     {
+        /*
+        [HarmonyPatch(typeof(Weapon), "DamagePerShot", MethodType.Getter)]
+        public static class Weapon_DamagePerShot_Patch
+        {
+            static void Postfix(Weapon __instance, ref float __result)
+            {
+                try
+                {
+                    if (__instance.Type != WeaponType.Melee || !(__instance.parent is Mech mech))
+                    {
+                        return;
+                    }
+
+                    Pilot pilot = mech.GetPilot();
+
+                    // Charge
+                    if (pilot.IsJuggernaut() && Fields.JuggernautCharges)
+                    {
+                        Logger.Debug("[Weapon_DamagePerShot_POSTFIX] Apply MeleeDamage multiplier for a charging juggernaut");
+                        __result = __result * 2;
+                        return;
+                    }
+
+                    // DFA
+                    if (pilot.IsJuggernaut() && __instance.WeaponSubType == WeaponSubType.DFA)
+                    {
+                        Logger.Debug("[Weapon_DamagePerShot_POSTFIX] Apply DFADamage multiplier for juggernaut");
+                        __result = __result * 3;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e);
+                }
+            }
+        }
+        */
+
+        [HarmonyPatch(typeof(Weapon), "Instability")]
+        public static class Weapon_Instability_Patch
+        {
+            static void Postfix(Weapon __instance, ref float __result)
+            {
+                try
+                {
+                    if (__instance.Type != WeaponType.Melee || !(__instance.parent is Mech mech))
+                    {
+                        return;
+                    }
+
+                    Pilot pilot = mech.GetPilot();
+                    
+                    // Charge
+                    if (pilot.IsJuggernaut() && Fields.JuggernautCharges)
+                    {
+                        Logger.Debug("[Weapon_Instability_POSTFIX] Apply MeleeInstability multiplier for a charging juggernaut");
+                        __result = __result * 1.2f;
+                        return;
+                    }
+
+                    // DFA
+                    if (pilot.IsJuggernaut() && __instance.WeaponSubType == WeaponSubType.DFA)
+                    {
+                        Logger.Debug("[Weapon_Instability_POSTFIX] Apply DFAInstability multiplier for juggernaut");
+                        __result = __result * 1.2f;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e);
+                }
+            }
+        }
+
+
+
         [HarmonyPatch(typeof(MechMeleeSequence), "GenerateMeleePath")]
         public static class MechMeleeSequence_GenerateMeleePath_Patch
         {
@@ -177,13 +253,20 @@ namespace MightyChargingJuggernaut.Patches
                             // IMPORTANT! At this point any stab dmg is already applied to the target, normalized by entrenched or terrain...
                             if (MeleeTarget is Mech TargetMech)
                             {
-                                // Remove Entrenched when charging?
+                                // Remove Entrenched from target when charging
                                 if (TargetMech.IsEntrenched)
                                 {
                                     Logger.Debug("[MechMeleeSequence_OnMeleeComplete_POSTFIX] Removing Entrenched from target");
                                     TargetMech.IsEntrenched = false;
                                     TargetMech.Combat.MessageCenter.PublishMessage(new FloatieMessage(TargetMech.GUID, TargetMech.GUID, "LOST: ENTRENCHED", FloatieMessage.MessageNature.Debuff));
                                 }
+
+                                // Charge and tackle causes slight instability
+                                float stabilityDamageSelf = __instance.OwningMech.GetMinStability(0, -1);
+                                __instance.OwningMech.AddAbsoluteInstability(stabilityDamageSelf, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
+                                __instance.OwningMech.NeedsInstabilityCheck = true;
+
+
 
                                 /*
                                 // Additional stability damage depending on distance?
@@ -218,9 +301,14 @@ namespace MightyChargingJuggernaut.Patches
             {
                 try
                 {
+                    if (Fields.JuggernautCharges)
+                    {
+                        // Charge and tackle causes slight instability, check for unsteady
+                        __instance.OwningMech.CheckForInstability();
+                    }
+
                     // Just to be sure
                     Fields.JuggernautCharges = false;
-                    Logger.Debug("[MechMeleeSequence_CompleteOrders_POSTFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges);
                 }
                 catch (Exception e)
                 {

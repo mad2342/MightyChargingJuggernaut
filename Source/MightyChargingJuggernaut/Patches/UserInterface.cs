@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Reflection;
+using BattleTech;
 using BattleTech.UI;
 using Harmony;
 using Localize;
@@ -73,6 +74,33 @@ namespace MightyChargingJuggernaut.Patches
                     {
                         Logger.Info($"[CombatHUDFireButton_CurrentFireMode_POSTFIX] Overriding FireText...");
                         __instance.FireText.SetText("CHARGE!");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e);
+                }
+            }
+        }
+
+
+
+        [HarmonyPatch(typeof(SelectionStateMove), "ProjectedStabilityForState", MethodType.Getter)]
+        public static class SelectionStateMove_ProjectedStabilityForState_Patch
+        {
+            public static void Postfix(SelectionStateMove __instance, ref float __result)
+            {
+                try
+                {
+                    if ((__instance.SelectedActor is Mech mech) && Fields.JuggernautCharges)
+                    {
+                        Logger.Info($"[SelectionStateMove_ProjectedStabilityForState_POSTFIX] Overriding projected stability...");
+                        
+                        // This would be vanilla: No stability change when sprinting
+                        //__result = mech.CurrentStability;
+
+                        // Charge and tackle causes slight instability
+                        __result = mech.GetMinStability(mech.CurrentStability, -1);
                     }
                 }
                 catch (Exception e)
