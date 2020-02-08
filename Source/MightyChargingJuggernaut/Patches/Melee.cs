@@ -237,11 +237,6 @@ namespace MightyChargingJuggernaut.Patches
                     {
                         // Get melee target
                         ICombatant MeleeTarget = (ICombatant)AccessTools.Property(typeof(MechMeleeSequence), "MeleeTarget").GetValue(__instance, null);
-                        
-                        if (MeleeTarget.IsDead || MeleeTarget.IsFlaggedForDeath)
-                        {
-                            return;
-                        }
 
                         // Reapplying "MeleeHitPushBackPhases" here as it doesn't seem to work anymore when only defined in AbilityDef
                         (MeleeTarget as AbstractActor).ForceUnitOnePhaseDown(__instance.owningActor.GUID, __instance.SequenceGUID, false);
@@ -250,7 +245,16 @@ namespace MightyChargingJuggernaut.Patches
 
                         if (Fields.JuggernautCharges)
                         {
-                            // IMPORTANT! At this point any stab dmg is already applied to the target, normalized by entrenched or terrain...
+                            // Charge and tackle causes slight instability
+                            float stabilityDamageSelf = __instance.OwningMech.GetMinStability(0, -1);
+                            __instance.OwningMech.AddAbsoluteInstability(stabilityDamageSelf, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
+                            __instance.OwningMech.NeedsInstabilityCheck = true;
+
+                            if (MeleeTarget.IsDead || MeleeTarget.IsFlaggedForDeath)
+                            {
+                                return;
+                            }
+
                             if (MeleeTarget is Mech TargetMech)
                             {
                                 // Remove Entrenched from target when charging
@@ -261,14 +265,8 @@ namespace MightyChargingJuggernaut.Patches
                                     TargetMech.Combat.MessageCenter.PublishMessage(new FloatieMessage(TargetMech.GUID, TargetMech.GUID, "LOST: ENTRENCHED", FloatieMessage.MessageNature.Debuff));
                                 }
 
-                                // Charge and tackle causes slight instability
-                                float stabilityDamageSelf = __instance.OwningMech.GetMinStability(0, -1);
-                                __instance.OwningMech.AddAbsoluteInstability(stabilityDamageSelf, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
-                                __instance.OwningMech.NeedsInstabilityCheck = true;
-
-
-
                                 /*
+                                // IMPORTANT! At this point any stab dmg is already applied to the target, normalized by entrenched or terrain...
                                 // Additional stability damage depending on distance?
                                 float additionalStabilityDamage = Utilities.GetAdditionalStabilityDamageFromSprintDistance(__instance.OwningMech, TargetMech, false);
 
