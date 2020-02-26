@@ -246,8 +246,12 @@ namespace MightyChargingJuggernaut.Patches
                         if (Fields.JuggernautCharges)
                         {
                             // Charge and tackle causes slight instability
-                            float stabilityDamageSelf = __instance.OwningMech.GetMinStability(0, -1);
-                            __instance.OwningMech.AddAbsoluteInstability(stabilityDamageSelf, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
+                            
+                            //float stabilityDamageSelf = __instance.OwningMech.GetMinStability(0, -1);
+                            //__instance.OwningMech.AddAbsoluteInstability(stabilityDamageSelf, StabilityChangeSource.NotSet, __instance.owningActor.GUID);
+
+                            float resultingStability = __instance.OwningMech.GetMinStability(__instance.OwningMech.CurrentStability, -1);
+                            __instance.OwningMech.StatCollection.Set<float>("Stability", resultingStability);
                             __instance.OwningMech.NeedsInstabilityCheck = true;
 
                             if (MeleeTarget.IsDead || MeleeTarget.IsFlaggedForDeath)
