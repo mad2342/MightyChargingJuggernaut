@@ -141,7 +141,7 @@ namespace MightyChargingJuggernaut.Patches
                     {
                         Fields.JuggernautCharges = false;
                     }
-                    Logger.Debug("[Pathing_Update_POSTFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges);
+                    //Logger.Debug("[Pathing_Update_POSTFIX] Fields.JuggernautCharges: " + Fields.JuggernautCharges);
                 }
                 catch (Exception e)
                 {
