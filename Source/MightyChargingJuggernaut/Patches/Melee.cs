@@ -62,7 +62,7 @@ namespace MightyChargingJuggernaut.Patches
                     // Charge
                     if (pilot.IsJuggernaut() && Fields.JuggernautCharges)
                     {
-                        Logger.Debug("[Weapon_Instability_POSTFIX] Apply MeleeInstability multiplier for a charging juggernaut");
+                        Logger.Info("[Weapon_Instability_POSTFIX] Apply MeleeInstability multiplier for a charging juggernaut");
                         __result = __result * 1.2f;
                         return;
                     }
@@ -70,7 +70,7 @@ namespace MightyChargingJuggernaut.Patches
                     // DFA
                     if (pilot.IsJuggernaut() && __instance.WeaponSubType == WeaponSubType.DFA)
                     {
-                        Logger.Debug("[Weapon_Instability_POSTFIX] Apply DFAInstability multiplier for juggernaut");
+                        Logger.Info("[Weapon_Instability_POSTFIX] Apply DFAInstability multiplier for juggernaut");
                         __result = __result * 1.2f;
                     }
                 }
