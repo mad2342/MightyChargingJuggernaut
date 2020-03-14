@@ -18,12 +18,9 @@ namespace MightyChargingJuggernaut.Patches
                 try
                 {
                     Pilot pilot = __instance.OwningActor.GetPilot();
-                    
-                    // ToDo: Cannot charge prone targets?
-                    // Only Mechs can be charged
-                    bool targetIsMech = target.UnitType == UnitType.Mech;
 
-                    if (!pilot.IsJuggernaut() || !targetIsMech)
+                    // Only (standing) Mechs can be charged
+                    if (!pilot.IsJuggernaut() || !(target is Mech mech) || mech.IsProne)
                     {
                         // Call original method
                         return true;
