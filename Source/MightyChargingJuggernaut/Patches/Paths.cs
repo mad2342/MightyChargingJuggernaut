@@ -20,7 +20,7 @@ namespace MightyChargingJuggernaut.Patches
                     Pilot pilot = __instance.OwningActor.GetPilot();
 
                     // Only (standing) Mechs can be charged
-                    if (!pilot.IsJuggernaut() || !(target is Mech mech) || mech.IsProne)
+                    if (!pilot.IsJuggernaut() || !(target is Mech targetMech) || targetMech.IsProne)
                     {
                         // Call original method
                         return true;

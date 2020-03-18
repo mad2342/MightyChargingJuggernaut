@@ -41,6 +41,7 @@ namespace MightyChargingJuggernaut.Patches
         */
 
 
+
         [HarmonyPatch(typeof(SelectionStateMove), "FireButtonString", MethodType.Getter)]
         public static class SelectionStateMove_FireButtonString_Patch
         {
